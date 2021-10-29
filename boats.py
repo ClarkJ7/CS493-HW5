@@ -24,22 +24,14 @@ def boats():
         content = request.get_json()
 
         # check for all attributes
-        if 'name' not in content:
-            return constants.boatAttr, 400
-        elif 'type' not in content:
-            return constants.boatAttr, 400
-        elif 'length' not in content:
-            return constants.boatAttr, 400
+        validate_content = validation.checkAttributes(content)
+        if validate_content is not True:
+            return validate_content
 
-        # check if name is valid
-        elif not validation.validateChar(content['name']):
-            return constants.invChar, 400
-        elif not validation.validateLen(content['name']):
-            return constants.invLen, 400
-
-        # check if name is unique
-        elif not validation.validateUniq(content['name']):
-            return constants.boatName, 403
+        # check if name, type, and length is valid
+        validate = validation.validateAll(content)
+        if validate is not True:
+            return validate
 
         # add boat to client
         else:
@@ -53,13 +45,13 @@ def boats():
             # add id and self attributes for response
             new_boat["id"] = new_boat.key.id
             new_boat["self"] = constants.current_url + "boats/" + str(new_boat.key.id)
-            return new_boat, 201
+
+            res = make_response(new_boat, 201)
+            res.headers['Location'] = new_boat["self"]
+            return res
 
     elif request.method in {'PUT', 'DELETE'}:
-        res = make_response(constants.badMethod)
-        # methods listed in route are automatically included in Allow header
-        res.status_code = 405
-        return res
+        return make_response(constants.badMethod, 405)
 
     # invalid method used
     else:
@@ -70,6 +62,7 @@ def boats():
 def boat(boat_id):
     boat_key = client.key(constants.boats, int(boat_id))
     target_boat = client.get(key=boat_key)
+
     # check for boat_id
     if target_boat is None:
         return constants.boatID, 404
@@ -95,28 +88,60 @@ def boat(boat_id):
         content = request.get_json()
 
         # check for all attributes
+        validate_content = validation.checkAttributes(content)
+        if validate_content is not True:
+            return validate_content
+
+        # check if name, type, and length is valid
+        validate = validation.validateAll(content)
+        if validate is not True:
+            return validate
+
+        target_boat.update({"name": content["name"],
+                            "type": content["type"],
+                            "length": content["length"]})
+        client.put(target_boat)
+        target_boat['id'] = target_boat.key.id
+        target_boat["self"] = constants.current_url + "boats/" + str(target_boat.key.id)
+
+        res = make_response(target_boat, 303)
+        res.headers['Location'] = target_boat["self"]
+        return res
+
+    elif 'PATCH' in request.method:
+        # get body from request
+        content = request.get_json()
+
+        # check for applicable/valid attributes
         if 'name' not in content:
-            return constants.boatAttr, 400
-        elif 'type' not in content:
-            return constants.boatAttr, 400
-        elif 'length' not in content:
-            return constants.boatAttr, 400
+            content['name'] = target_boat['name']
+        else:
+            # check if new name is valid
+            validate_name = validation.validateName(content['name'])
+            if validate_name is not True:
+                return validate_name
 
-        # check if name is valid
-        elif not validation.validateChar(content['name']):
-            return constants.invChar, 400
-        elif not validation.validateLen(content['name']):
-            return constants.invLen, 400
+        if 'type' not in content:
+            content['type'] = target_boat['type']
+        else:
+            # check if new type is valid
+            validate_type = validation.validateType(content['type'])
+            if validate_type is not True:
+                return validate_type
 
-        # check if name is unique
-        elif not validation.validateUniq(content['name']):
-            return constants.boatName, 403
+        if 'length' not in content:
+            content['length'] = target_boat['length']
+        else:
+            # check if new length is valid
+            validate_length = validation.validateLength(content['length'])
+            if validate_length is not True:
+                return validate_length
 
         target_boat.update({"name": content["name"], "type": content["type"], "length": content["length"]})
         client.put(target_boat)
         target_boat['id'] = target_boat.key.id
         target_boat["self"] = constants.current_url + "boats/" + str(target_boat.key.id)
-        return make_response(target_boat, 303)
+        return make_response(target_boat, 200)
 
     # invalid method used
     else:
